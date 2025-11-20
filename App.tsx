@@ -11,8 +11,8 @@ const App: React.FC = () => {
   const [showRatioModal, setShowRatioModal] = useState(false);
   const [pendingPrompt, setPendingPrompt] = useState('');
   
-  // Model Selection State - Default to Gemini 2.0 Flash (Latest Fast)
-  const [selectedModel, setSelectedModel] = useState('gemini-2.0-flash'); 
+  // Model Selection State - Default to Gemini 1.5 Flash (Stable)
+  const [selectedModel, setSelectedModel] = useState('gemini-1.5-flash'); 
 
   // Lifted State for Input Area
   const [inputText, setInputText] = useState('');

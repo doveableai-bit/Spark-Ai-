@@ -5,13 +5,13 @@ import { Attachment } from "../types";
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 let chatSession: Chat | null = null;
-let currentChatModel: string = 'gemini-2.0-flash';
+let currentChatModel: string = 'gemini-1.5-flash';
 
 export const MODEL_OPTIONS = [
-  { id: 'gemini-2.0-pro-exp-02-05', name: 'Gemini 2.0 Pro (Newest Smartest)', type: 'preview' },
-  { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash (Newest Fast)', type: 'preview' },
-  { id: 'gemini-1.5-pro-001', name: 'Gemini 1.5 Pro (Stable Reasoning)', type: 'stable' },
-  { id: 'gemini-1.5-flash-001', name: 'Gemini 1.5 Flash (Stable Fast)', type: 'stable' },
+  { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash (Stable Fast)', type: 'stable' },
+  { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro (Stable Reasoning)', type: 'stable' },
+  { id: 'gemini-2.0-flash-exp', name: 'Gemini 2.0 Flash (Preview)', type: 'preview' },
+  { id: 'gemini-2.0-pro-exp-02-05', name: 'Gemini 2.0 Pro (Preview)', type: 'preview' },
 ];
 
 const SPARK_SYSTEM_INSTRUCTION = `
@@ -62,7 +62,7 @@ Follow this structure:
 - **Other Tasks**: If the user asks to generate images, search the web, or write code, perform those tasks effectively while maintaining a helpful, professional tone, but you do not need to force the biology structure on non-educational requests.
 `;
 
-export const initializeChat = (modelId: string = 'gemini-2.0-flash', systemInstruction?: string) => {
+export const initializeChat = (modelId: string = 'gemini-1.5-flash', systemInstruction?: string) => {
   currentChatModel = modelId;
   chatSession = ai.chats.create({
     model: modelId,
@@ -103,7 +103,7 @@ export const sendChatMessage = async (message: string, modelId?: string): Promis
   }
 };
 
-export const sendSearchMessage = async (message: string, modelId: string = 'gemini-2.0-flash') => {
+export const sendSearchMessage = async (message: string, modelId: string = 'gemini-1.5-flash') => {
    try {
       const response = await ai.models.generateContent({
         model: modelId,
@@ -138,10 +138,10 @@ export const generateImage = async (prompt: string, aspectRatio: string): Promis
   }
 
   try {
-    // Always use the latest preview model for Image Gen as it has the best capabilities
-    // or fallback to stable imagen if needed.
+    // Use Gemini 2.0 Flash Exp for images (Preview model, usually supports image gen)
+    // If this fails, the catch block will handle it.
     const response = await ai.models.generateImages({
-      model: 'gemini-2.0-flash', 
+      model: 'gemini-2.0-flash-exp', 
       prompt: prompt,
       config: {
         numberOfImages: 1,
@@ -164,7 +164,7 @@ export const generateImage = async (prompt: string, aspectRatio: string): Promis
 
 export const generateWithImages = async (prompt: string, attachments: Attachment[], aspectRatio: string): Promise<string> => {
   try {
-      // Step 1: Analyze using a vision-capable model (1.5 Flash is great for this)
+      // Step 1: Analyze using a vision-capable model (1.5 Flash is great/stable for this)
       const parts: any[] = [];
       attachments.forEach(att => {
         parts.push({
@@ -186,7 +186,7 @@ export const generateWithImages = async (prompt: string, attachments: Attachment
       ` });
 
       const analysisResponse = await ai.models.generateContent({
-          model: 'gemini-1.5-flash-001',
+          model: 'gemini-1.5-flash',
           contents: { parts: parts }
       });
 
@@ -202,9 +202,9 @@ export const generateWithImages = async (prompt: string, attachments: Attachment
       Style: Photorealistic, High Quality.
       `;
 
-      // Step 3: Generate using the strong image model
+      // Step 3: Generate using the image model
       const imageResponse = await ai.models.generateImages({
-        model: 'gemini-2.0-flash',
+        model: 'gemini-2.0-flash-exp',
         prompt: finalPrompt,
         config: {
           numberOfImages: 1,
@@ -225,7 +225,7 @@ export const generateWithImages = async (prompt: string, attachments: Attachment
   }
 }
 
-export const analyzeImage = async (prompt: string, attachments: Attachment[], modelId: string = 'gemini-2.0-flash') => {
+export const analyzeImage = async (prompt: string, attachments: Attachment[], modelId: string = 'gemini-1.5-flash') => {
     try {
         const parts: any[] = [];
         attachments.forEach(att => {
