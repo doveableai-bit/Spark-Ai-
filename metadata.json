@@ -1,0 +1,5 @@
+{
+  "name": "Spark AI",
+  "description": "A world-class multi-modal AI assistant powered by Gemini 2.5 and Imagen 3. Features real-time chat, image generation, and web search grounding.",
+  "requestFramePermissions": []
+}
