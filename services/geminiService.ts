@@ -8,58 +8,41 @@ let chatSession: Chat | null = null;
 let currentChatModel: string = 'gemini-1.5-flash';
 
 export const MODEL_OPTIONS = [
-  { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash (Stable Fast)', type: 'stable' },
-  { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro (Stable Reasoning)', type: 'stable' },
-  { id: 'gemini-2.0-flash-exp', name: 'Gemini 2.0 Flash (Preview)', type: 'preview' },
-  { id: 'gemini-2.0-pro-exp-02-05', name: 'Gemini 2.0 Pro (Preview)', type: 'preview' },
+  { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash (Stable)', type: 'stable' },
+  { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash (Latest)', type: 'preview' },
+  { id: 'gemini-2.0-flash-exp', name: 'Gemini 2.0 Flash (Exp)', type: 'preview' },
 ];
 
+// UPDATED SYSTEM PROMPT: Adaptive Behavior
 const SPARK_SYSTEM_INSTRUCTION = `
-You are a professional, student-friendly educational assistant. Your task is to explain any topic in a clear, simple, and easy-to-understand way for students. Before giving a detailed explanation, provide a brief note on who discovered the topic and the exact year/date of discovery, if applicable.
+You are Spark AI, a highly intelligent, friendly, and versatile AI assistant.
 
-Follow this structure:
+**CORE BEHAVIOR (General Mode):**
+- Act exactly like ChatGPT: helpful, natural, adaptive, and conversational.
+- You can write code, search the web, tell jokes, and help with daily tasks.
+- Keep answers clear, concise, and relevant to the user's question.
 
-1. **Discovery / History (Optional)**
-- Mention the scientist who discovered the topic and the **exact year** (e.g., 1890) or date.
-- Keep it short and relevant.
-- Example: "Lipids were first detailed by Michel-Eugène Chevreul in **1823**."
+**SPECIAL EDUCATIONAL MODE (Biology/Science Only):**
+IF AND ONLY IF the user asks about a topic related to **Biology, Anatomy, Zoology, Botany, or Medical Science** (e.g., "Explain Lipids", "What is the Heart?", "Define Photosynthesis"), you must strictly follow this "Student Bio Sketch" structure:
 
+1. **Discovery / History**
+   - Mention the scientist and the **exact year** (e.g., 1890) of discovery if known.
 2. **Professional Definition**
-- Give a clear, professional definition of the topic.
-- Use simple and easy-to-read language suitable for students.
-- Example: "Lipids are biomolecules including fats, oils, waxes, and sterols, essential for energy storage, cell structure, and other vital functions."
-
-3. **Types / Categories (if applicable)**
-- Explain different types or categories.
-- Include structure, characteristics, or key points for each type.
-- Give examples for each type.
-- Example format:
-  - **Type Name**: Description (Example)
-
+   - Clear, student-friendly definition.
+3. **Types / Categories**
+   - List types with brief examples.
 4. **Importance / Functions**
-- List main roles/functions in bullet points.
-- Include short examples if possible.
-- Example format:
-  - **Function Name**: Explanation.
+   - Bullet points of main roles.
+5. **Mechanism** (Optional)
+   - Simple explanation of how it works.
+6. **Visual / Diagram** (Optional)
+   - Only if explicitly asked (use ASCII).
+7. **Summary**
+   - A one-sentence takeaway.
 
-5. **Mechanism / How it Works (Optional)**
-- Explain processes in simple terms if applicable (digestion, absorption, chemical reactions, etc.).
-- Add health implications, benefits, or risks if relevant.
-
-6. **Visual / Summary Diagram (Optional)**
-- Only include a visual/tree diagram if the user explicitly asks for "visual", "sketch", or "diagram".
-- Use ASCII text structure (e.g., ├── ).
-
-7. **Final Summary (Optional)**
-- Summarize key points in a few lines.
-- Highlight main functions, importance, and takeaways.
-
-**Instructions for Chatbot:**
-- **Default Mode**: For any explanation request (especially Biology/Science), STRICTLY follow the structure above.
-- **History**: Always include the exact year (e.g. 1890) in the discovery section if known.
-- **Visuals**: Do not show the diagram unless requested.
-- **Tone**: Professional, unique, structured, and easy for students.
-- **Other Tasks**: If the user asks to generate images, search the web, or write code, perform those tasks effectively while maintaining a helpful, professional tone, but you do not need to force the biology structure on non-educational requests.
+**CRITICAL:**
+- Do NOT use the Bio Sketch format for normal questions like "How are you?", "Generate an image of a cat", or "Write python code".
+- Use the General Mode for everything else.
 `;
 
 export const initializeChat = (modelId: string = 'gemini-1.5-flash', systemInstruction?: string) => {
@@ -137,9 +120,28 @@ export const generateImage = async (prompt: string, aspectRatio: string): Promis
     throw new Error("A text prompt is required to generate an image.");
   }
 
+  // Primary Strategy: Use Imagen 3 Stable
   try {
-    // Use Gemini 2.0 Flash Exp for images (Preview model, usually supports image gen)
-    // If this fails, the catch block will handle it.
+    const response = await ai.models.generateImages({
+      model: 'imagen-3.0-generate-001', 
+      prompt: prompt,
+      config: {
+        numberOfImages: 1,
+        outputMimeType: 'image/jpeg',
+        aspectRatio: aspectRatio, 
+      },
+    });
+
+    const base64ImageBytes = response.generatedImages?.[0]?.image?.imageBytes;
+    if (base64ImageBytes) {
+        return `data:image/jpeg;base64,${base64ImageBytes}`;
+    }
+  } catch (error) {
+    console.warn("Imagen 3 failed, attempting fallback...", error);
+  }
+
+  // Fallback Strategy: Use Gemini 2.0 Flash Exp
+  try {
     const response = await ai.models.generateImages({
       model: 'gemini-2.0-flash-exp', 
       prompt: prompt,
@@ -164,7 +166,7 @@ export const generateImage = async (prompt: string, aspectRatio: string): Promis
 
 export const generateWithImages = async (prompt: string, attachments: Attachment[], aspectRatio: string): Promise<string> => {
   try {
-      // Step 1: Analyze using a vision-capable model (1.5 Flash is great/stable for this)
+      // Step 1: Analyze using a vision-capable model
       const parts: any[] = [];
       attachments.forEach(att => {
         parts.push({
@@ -202,7 +204,26 @@ export const generateWithImages = async (prompt: string, attachments: Attachment
       Style: Photorealistic, High Quality.
       `;
 
-      // Step 3: Generate using the image model
+      // Step 3: Generate using the image model (Reusing the robust generateImage function logic here ideally, but calling directly for simplicity)
+      
+      // Try Imagen 3 first
+      try {
+        const imageResponse = await ai.models.generateImages({
+            model: 'imagen-3.0-generate-001',
+            prompt: finalPrompt,
+            config: {
+            numberOfImages: 1,
+            outputMimeType: 'image/jpeg',
+            aspectRatio: aspectRatio, 
+            },
+        });
+        const b64 = imageResponse.generatedImages?.[0]?.image?.imageBytes;
+        if (b64) return `data:image/jpeg;base64,${b64}`;
+      } catch (e) {
+         // Fallback inside multimodal
+      }
+
+      // Fallback to Gemini 2.0
       const imageResponse = await ai.models.generateImages({
         model: 'gemini-2.0-flash-exp',
         prompt: finalPrompt,
